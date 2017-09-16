@@ -166,8 +166,9 @@ class Trainer(object):
     output_dim = episode_width
     self.model = self.get_model()
     self.model.setup()
-
-    sess = tf.Session()
+    config=tf.ConfigProto()
+    config.gpu_options.allow_growth = True
+    sess = tf.Session(config=config)
     sess.run(tf.global_variables_initializer())
 
     saver = tf.train.Saver(max_to_keep=10)
