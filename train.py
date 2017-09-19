@@ -45,6 +45,9 @@ tf.flags.DEFINE_integer('num_episodes', 100000, 'number of training episodes')
 tf.flags.DEFINE_integer('validation_frequency', 20,
                         'every so many training episodes, '
                         'assess validation accuracy')
+tf.flags.DEFINE_integer('save_frequency', 500,
+                        'every so many training episodes, '
+                        'saves model')
 tf.flags.DEFINE_integer('validation_length', 10,
                         'number of episodes to use to compute '
                         'validation accuracy')
@@ -53,6 +56,7 @@ tf.flags.DEFINE_string('save_dir', '', 'directory to save model to')
 tf.flags.DEFINE_bool('use_lsh', False,
                      'use locality-sensitive hashing '
                      '(NOTE: not fully tested)')
+tf.flags.DEFINE_string('logs_path', '', 'directory to save logs to')
 
 
 class Trainer(object):
@@ -133,6 +137,20 @@ class Trainer(object):
   def individual_compute_correct(self, y, y_pred):
     return y_pred == y
 
+  def log_scalar(self, tag, value, step):
+        """Log a scalar variable.
+        Parameter
+        ----------
+        tag : basestring
+            Name of the scalar
+        value
+        step : int
+            training iteration
+        """
+        summary = tf.Summary(value=[tf.Summary.Value(tag=tag,
+                                                     simple_value=value)])
+        self.writer.add_summary(summary, step)
+
   def run(self):
     """Performs training.
 
@@ -171,14 +189,18 @@ class Trainer(object):
     sess = tf.Session(config=config)
     sess.run(tf.global_variables_initializer())
 
-    saver = tf.train.Saver(max_to_keep=10)
+    saver = tf.train.Saver(max_to_keep=5)
     ckpt = None
     if FLAGS.save_dir:
       ckpt = tf.train.get_checkpoint_state(FLAGS.save_dir)
     if ckpt and ckpt.model_checkpoint_path:
       logging.info('restoring from %s', ckpt.model_checkpoint_path)
       saver.restore(sess, ckpt.model_checkpoint_path)
-
+    
+    #for tensorflow summaries
+    if FLAGS.logs_path:
+      self.writer = tf.summary.FileWriter(FLAGS.logs_path, graph=tf.get_default_graph())
+    
     logging.info('starting now')
     losses = []
     random.seed(FLAGS.seed)
@@ -189,6 +211,8 @@ class Trainer(object):
       outputs = self.model.episode_step(sess, x, y, clear_memory=True)
       loss = outputs
       losses.append(loss)
+      if FLAGS.logs_path:
+        self.log_scalar('training_loss',np.mean(losses),i)
 
       if i % FLAGS.validation_frequency == 0:
         logging.info('episode batch %d, avg train loss %f',
@@ -223,12 +247,18 @@ class Trainer(object):
         logging.info('%d-shot: %.3f, ' * (self.episode_width + 1),
                      *sum([[k, np.mean(correct_by_shot[k])]
                            for k in xrange(self.episode_width + 1)], []))
+        
+        if FLAGS.logs_path:
+          self.log_scalar('validation_acuracy',np.mean(correct),i)
+          for k in xrange(self.episode_width + 1):
+            self.log_scalar('%d-shot'%(k),np.mean(correct_by_shot[k]),i)
+            
 
-        if saver and FLAGS.save_dir:
-          saved_file = saver.save(sess,
-                                  os.path.join(FLAGS.save_dir, 'model.ckpt'),
-                                  global_step=self.model.global_step)
-          logging.info('saved model to %s', saved_file)
+      if saver and FLAGS.save_dir and i % FLAGS.save_frequency == 0:
+        saved_file = saver.save(sess,
+                                os.path.join(FLAGS.save_dir, 'model.ckpt'),
+                                global_step=self.model.global_step)
+        logging.info('saved model to %s', saved_file)
 
 
 def main(unused_argv):
