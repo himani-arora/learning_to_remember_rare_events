@@ -77,6 +77,7 @@ class Trainer(object):
 
     self.output_dim = (output_dim if output_dim is not None
                        else self.episode_width)
+    self.shot_width=int(self.episode_length/self.episode_width*1.0)-1
 
   def get_model(self):
     # vocab size is the number of distinct values that
@@ -221,7 +222,7 @@ class Trainer(object):
 
         # validation
         correct = []
-        correct_by_shot = dict((k, []) for k in xrange(self.episode_width + 1))
+        correct_by_shot = dict((k, []) for k in xrange(self.shot_width + 1))
         for _ in xrange(FLAGS.validation_length):
           x, y = self.sample_episode_batch(
               valid_data, episode_length, episode_width, 1)
@@ -231,26 +232,26 @@ class Trainer(object):
           correct.append(self.compute_correct(np.array(y), y_preds))
 
           # compute per-shot accuracies
-          seen_counts = [[0] * episode_width for _ in xrange(batch_size)]
+          seen_counts = [0] * episode_width 
           # loop over episode steps
           for yy, yy_preds in zip(y, y_preds):
             # loop over batch examples
-            for k, (yyy, yyy_preds) in enumerate(zip(yy, yy_preds)):
+            for (yyy, yyy_preds) in zip(yy, yy_preds):
               yyy, yyy_preds = int(yyy), int(yyy_preds)
-              count = seen_counts[k][yyy % self.episode_width]
+              count = seen_counts[yyy % self.episode_width]
               if count in correct_by_shot:
                 correct_by_shot[count].append(
                     self.individual_compute_correct(yyy, yyy_preds))
-              seen_counts[k][yyy % self.episode_width] = count + 1
+              seen_counts[yyy % self.episode_width] = count + 1
 
         logging.info('validation overall accuracy %f', np.mean(correct))
-        logging.info('%d-shot: %.3f, ' * (self.episode_width + 1),
+        logging.info('%d-shot: %.3f, ' * (self.shot_width + 1),
                      *sum([[k, np.mean(correct_by_shot[k])]
-                           for k in xrange(self.episode_width + 1)], []))
+                           for k in xrange(self.shot_width + 1)], []))
         
         if FLAGS.logs_path:
           self.log_scalar('validation_acuracy',np.mean(correct),i)
-          for k in xrange(self.episode_width + 1):
+          for k in xrange(self.shot_width + 1):
             self.log_scalar('%d-shot'%(k),np.mean(correct_by_shot[k]),i)
             
 
