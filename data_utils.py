@@ -33,17 +33,20 @@ import tensorflow as tf
 
 
 MAIN_DIR = ''
-REPO_LOCATION = 'https://github.com/brendenlake/omniglot.git'
-REPO_DIR = os.path.join(MAIN_DIR, 'omniglot')
-DATA_DIR = os.path.join(REPO_DIR, 'python')
-TRAIN_DIR = os.path.join(DATA_DIR, 'images_background')
-TEST_DIR = os.path.join(DATA_DIR, 'images_evaluation')
-DATA_FILE_FORMAT = os.path.join(MAIN_DIR, '%s_omni.pkl')
+#REPO_LOCATION = 'https://github.com/brendenlake/omniglot.git'
+#REPO_DIR = os.path.join(MAIN_DIR, 'omniglot')
+#DATA_DIR = os.path.join(REPO_DIR, 'python')
+DATA_DIR = os.path.join('/home/himani/data/tiny-imagenet-200/one_shot/100class_500sample')
 
-TRAIN_ROTATIONS = True  # augment training data with rotations
+#TRAIN_DIR = os.path.join(DATA_DIR, 'images_background')
+#TEST_DIR = os.path.join(DATA_DIR, 'images_evaluation')
+DATA_FILE_FORMAT = os.path.join(DATA_DIR, '%s_tinyimagenet.pickle')
+
+TRAIN_ROTATIONS = False  # augment training data with rotations
 TEST_ROTATIONS = False  # augment testing data with rotations
-IMAGE_ORIGINAL_SIZE = 105
-IMAGE_NEW_SIZE = 28
+IMAGE_ORIGINAL_SIZE = 64
+IMAGE_NEW_SIZE = 64
+IMAGE_CHANNEL=3
 
 
 def get_data():
@@ -54,26 +57,17 @@ def get_data():
     label to list of examples.
   """
   with tf.gfile.GFile(DATA_FILE_FORMAT % 'train') as f:
-    processed_train_data = pickle.load(f)
+    train_data = pickle.load(f)
   with tf.gfile.GFile(DATA_FILE_FORMAT % 'test') as f:
-    processed_test_data = pickle.load(f)
+    test_data = pickle.load(f)
 
-  train_data = {}
-  test_data = {}
-
-  for data, processed_data in zip([train_data, test_data],
-                                  [processed_train_data, processed_test_data]):
-    for image, label in zip(processed_data['images'],
-                            processed_data['labels']):
-      if label not in data:
-        data[label] = []
-      data[label].append(image.reshape([-1]).astype('float32'))
+  #data[label].append(image.reshape([-1]).astype('float32'))
 
   intersection = set(train_data.keys()) & set(test_data.keys())
   assert not intersection, 'Train and test data intersect.'
-  ok_num_examples = [len(ll) == 20 for _, ll in train_data.iteritems()]
+  ok_num_examples = [len(ll) == 500 for _, ll in train_data.iteritems()]
   assert all(ok_num_examples), 'Bad number of examples in train data.'
-  ok_num_examples = [len(ll) == 20 for _, ll in test_data.iteritems()]
+  ok_num_examples = [len(ll) == 500 for _, ll in test_data.iteritems()]
   assert all(ok_num_examples), 'Bad number of examples in test data.'
 
   logging.info('Number of labels in train data: %d.', len(train_data))

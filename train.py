@@ -33,7 +33,7 @@ import model
 
 FLAGS = tf.flags.FLAGS
 
-tf.flags.DEFINE_integer('rep_dim', 128,
+tf.flags.DEFINE_integer('rep_dim', 256,
                         'dimension of keys to use in memory')
 tf.flags.DEFINE_integer('episode_length', 100, 'length of episode')
 tf.flags.DEFINE_integer('episode_width', 5,
@@ -42,10 +42,10 @@ tf.flags.DEFINE_integer('memory_size', None, 'number of slots in memory. '
                         'Leave as None to default to episode length')
 tf.flags.DEFINE_integer('batch_size', 16, 'batch size')
 tf.flags.DEFINE_integer('num_episodes', 100000, 'number of training episodes')
-tf.flags.DEFINE_integer('validation_frequency', 20,
+tf.flags.DEFINE_integer('validation_frequency', 50,
                         'every so many training episodes, '
                         'assess validation accuracy')
-tf.flags.DEFINE_integer('save_frequency', 500,
+tf.flags.DEFINE_integer('save_frequency', 5000,
                         'every so many training episodes, '
                         'saves model')
 tf.flags.DEFINE_integer('validation_length', 10,
@@ -62,10 +62,11 @@ tf.flags.DEFINE_string('logs_path', '', 'directory to save logs to')
 class Trainer(object):
   """Class that takes care of training, validating, and checkpointing model."""
 
-  def __init__(self, train_data, valid_data, input_dim, output_dim=None):
+  def __init__(self, train_data, valid_data, input_dim, input_channel=1,output_dim=None):
     self.train_data = train_data
     self.valid_data = valid_data
     self.input_dim = input_dim
+    self.input_channel=input_channel
 
     self.rep_dim = FLAGS.rep_dim
     self.episode_length = FLAGS.episode_length
@@ -84,8 +85,8 @@ class Trainer(object):
     # could go into the memory key-value storage
     vocab_size = self.episode_width * self.batch_size
     return model.Model(
-        self.input_dim, self.output_dim, self.rep_dim, self.memory_size,
-        vocab_size, use_lsh=self.use_lsh)
+        self.input_dim, self.input_channel, self.output_dim, self.rep_dim, 
+        self.memory_size, vocab_size, use_lsh=self.use_lsh)
 
   def sample_episode_batch(self, data,
                            episode_length, episode_width, batch_size):
@@ -190,6 +191,7 @@ class Trainer(object):
     sess = tf.Session(config=config)
     sess.run(tf.global_variables_initializer())
 
+    i_start=0
     saver = tf.train.Saver(max_to_keep=5)
     ckpt = None
     if FLAGS.save_dir:
@@ -197,16 +199,17 @@ class Trainer(object):
     if ckpt and ckpt.model_checkpoint_path:
       logging.info('restoring from %s', ckpt.model_checkpoint_path)
       saver.restore(sess, ckpt.model_checkpoint_path)
-    
+      i_start=int(os.path.basename(ckpt.model_checkpoint_path).split('-')[1])
+      i_start=int(i_start*1.0/FLAGS.episode_length)         
     #for tensorflow summaries
     if FLAGS.logs_path:
       self.writer = tf.summary.FileWriter(FLAGS.logs_path, graph=tf.get_default_graph())
     
-    logging.info('starting now')
+    logging.info('starting now from episode: %d',i_start)
     losses = []
     random.seed(FLAGS.seed)
     np.random.seed(FLAGS.seed)
-    for i in xrange(FLAGS.num_episodes):
+    for i in xrange(i_start, FLAGS.num_episodes):
       x, y = self.sample_episode_batch(
           train_data, episode_length, episode_width, batch_size)
       outputs = self.model.episode_step(sess, x, y, clear_memory=True)
@@ -264,7 +267,7 @@ class Trainer(object):
 
 def main(unused_argv):
   train_data, valid_data = data_utils.get_data()
-  trainer = Trainer(train_data, valid_data, data_utils.IMAGE_NEW_SIZE ** 2)
+  trainer = Trainer(train_data, valid_data, data_utils.IMAGE_NEW_SIZE ** 2,data_utils.IMAGE_CHANNEL)
   trainer.run()
 
 
